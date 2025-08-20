@@ -1,3 +1,4 @@
+//four pins are used for bainary counter
 int pin1=9;
 int pin2=10;
 int pin3=11;
@@ -13,7 +14,8 @@ void setup()
 void loop()
 {
   while(1)
-  {
+  {	//if 0001 means first led will on like the way if 1 will on
+    //0 means off.
     for(int i=0;i<16;i++)
     {
       if((i>>0)&1)
@@ -32,7 +34,7 @@ void loop()
       {
         digitalWrite(12,HIGH);
       }
-      delay(1000);
+      delay(1000);//after every blink 1 sec delay  
       digitalWrite(9,LOW);
       digitalWrite(10,LOW);
       digitalWrite(11,LOW);
