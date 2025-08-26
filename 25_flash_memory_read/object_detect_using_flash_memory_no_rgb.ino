@@ -19,7 +19,8 @@ SPIFlash flash(chipSelect);
 long duration;
 int distance;
 bool objectPresent = false;
-uint32_t logAddress = 0; // memory pointer
+uint32_t logAddress = 0;    
+bool logsPrinted = false;   // Prevent continuous log printing
 
 void setup() {
   Serial.begin(9600);
@@ -31,12 +32,16 @@ void setup() {
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
 
-  // Initialize flash
   if (!flash.begin()) {
     Serial.println("Flash initialization failed!");
     while (1);
   }
   Serial.println("Flash initialized.");
+
+  // Clear old logs (erase first sector)
+  flash.eraseSector(0);
+  logAddress = 0;
+
   logEvent("System started");
 }
 
@@ -48,16 +53,23 @@ void loop() {
   Serial.println(" cm");
 
   if (distance > 0 && distance <= 15) {
-    setColor(255, 0, 0); // Red - close
+    setColor(255, 0, 0); // Red
+    logsPrinted = false;
   } else if (distance > 15 && distance <= 40) {
-    setColor(0, 0, 255); // Blue - medium
+    setColor(0, 0, 255); // Blue
+    if (!logsPrinted) {
+      readLogs();        // Print logs only once per Blue session
+      logsPrinted = true;
+    }
   } else if (distance > 40 && distance < 100) {
-    setColor(0, 255, 0); // Green - far
+    setColor(0, 255, 0); // Green
+    logsPrinted = false;
   } else {
-    setColor(0, 0, 0);   // Off - out of range
+    setColor(0, 0, 0);   // Off
+    logsPrinted = false;
   }
 
-  // Log entry/exit 
+  // Logging object entry/exit
   if (distance > 0 && distance < 100) {
     if (!objectPresent) {
       logEvent("Object ENTERED at distance " + String(distance) + " cm");
@@ -73,7 +85,7 @@ void loop() {
   delay(500);
 }
 
-//to get distance from ultrasonic sensor
+// ultrasonic distance
 int getDistance() {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
@@ -83,26 +95,44 @@ int getDistance() {
   digitalWrite(trigPin, LOW);
 
   duration = pulseIn(echoPin, HIGH, 30000);
-
   if (duration == 0) return -1;
 
   return duration * 0.034 / 2;
 }
 
-//set RGB LED color
+// RGB LED
 void setColor(int r, int g, int b) {
   analogWrite(redPin, r);
   analogWrite(greenPin, g);
   analogWrite(bluePin, b);
 }
 
-//log events into flash memory
+// Log events (byte by byte, no '\0' inside logs)
 void logEvent(String text) {
   String entry = "[" + String(millis()) + " ms] " + text + "\n";
   Serial.print("Logged: ");
   Serial.println(entry);
 
-  // Write log entry into flash sequentially
-  flash.writeStr(logAddress, entry);
-  logAddress += entry.length();
+  for (unsigned int i = 0; i < entry.length(); i++) {
+    flash.writeByte(logAddress++, entry[i]);
+  }
 }
+
+// Read logs sequentially until logAddress
+void readLogs() {
+  Serial.println("\n--- Reading Logs from Flash ---");
+  uint32_t addr = 0;
+  char c;
+
+  while (addr < logAddress) {
+    c = flash.readByte(addr++);
+
+    // Skip unprogrammed/erased bytes (0xFF)
+    if (c == (char)0xFF) continue;
+
+    Serial.print(c);
+  }
+
+  Serial.println("\n--- End of Logs ---");
+}
+
