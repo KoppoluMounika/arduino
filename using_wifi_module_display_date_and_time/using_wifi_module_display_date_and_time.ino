@@ -112,19 +112,19 @@ void logEvent(String eventType, int dist, String timeStr) {
 // RGB LED blink based on distance
 void blinkRGB(int dist) {
   if (dist > 0 && dist < 7) {
-                                                // Near → Red blink
+                                                // Near -- Red blink
     digitalWrite(redPin, HIGH);
     digitalWrite(greenPin, LOW);
     digitalWrite(bluePin, LOW);
   }
   else if (dist >= 7 && dist <= 15) {
-                                                // Medium → Blue blink
+                                                // Medium -- Blue blink
     digitalWrite(redPin, LOW);
     digitalWrite(greenPin, LOW);
     digitalWrite(bluePin, HIGH);
   }
   else if (dist > 15) {
-                                                // Far → Green blink
+                                                // Far -- Green blink
     digitalWrite(redPin, LOW);
     digitalWrite(greenPin, HIGH);
     digitalWrite(bluePin, LOW);
