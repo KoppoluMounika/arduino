@@ -2,13 +2,13 @@
 #include <SD.h>
 #include <SoftwareSerial.h>
 
-SoftwareSerial esp(8, 9);                           // RX, TX for ESP-01
+SoftwareSerial esp(8, 9);   // RX, TX for ESP-01
 
 // Ultrasonic pins
 const int trigPin = 2;
 const int echoPin = 3;
 
-// SD card CS
+// SD card CS pin
 const int chipSelect = 10;
 
 // RGB LED pins
@@ -17,8 +17,8 @@ const int greenPin = 5;
 const int bluePin = 4;
 
 // WiFi credentials
-String ssid = "BITSILICA_1";
-String password = "cepybdmv";
+String ssid = "Mounika";
+String password = "Mounika@1";
 
 // Variables
 long duration;
@@ -27,8 +27,8 @@ bool objectPresent = false;
 File logFile;
 
 void setup() {
-  Serial.begin(9600);                                   // Serial Monitor
-  esp.begin(115200);                                    // ESP-01 baud
+  Serial.begin(9600);     
+  esp.begin(115200);      // ESP-01 default baud rate
 
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
@@ -44,15 +44,23 @@ void setup() {
   }
   Serial.println("SD card ready.");
 
-  // Connect ESP to WiFi
+  // Reset ESP
   sendESPCommand("AT+RST", 2000);
+  sendESPCommand("ATE0", 1000); // echo off
+
+  // Set WiFi mode = STA
   sendESPCommand("AT+CWMODE=1", 1000);
-  sendESPCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", 5000);
-  Serial.println("ESP connected to WiFi.");
+
+  // Join WiFi
+  sendESPCommand("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"", 8000);
+
+  // Check IP
+  sendESPCommand("AT+CIFSR", 2000);
+  Serial.println("ESP WiFi init complete.");
 }
 
 void loop() {
-  // Read Ultrasonic distance
+  // Measure ultrasonic distance
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
@@ -62,9 +70,8 @@ void loop() {
   duration = pulseIn(echoPin, HIGH, 30000);
   distance = duration * 0.034 / 2;
 
-  String currentTime = getTimeFromESP();                  // Fetch real time string
+  String currentTime = getTimeFromAPI();   // Get current time
 
-  // Object detection
   if (distance > 0 && distance < 15 && !objectPresent) {
     objectPresent = true;
     logEvent("ENTERED", distance, currentTime);
@@ -74,26 +81,46 @@ void loop() {
     logEvent("EXITED", distance, currentTime);
   }
 
-  // RGB LED blink based on distance
   blinkRGB(distance);
-
-  delay(500);
+  delay(1000);
 }
 
+// ---- Functions ----
 void sendESPCommand(String cmd, int waitTime) {
   esp.println(cmd);
   long start = millis();
   while ((millis() - start) < waitTime) {
     while (esp.available()) {
       char c = esp.read();
-      Serial.write(c);                       // Print ESP response to Serial Monitor
+      Serial.write(c);   // Print ESP response
     }
   }
 }
 
-// Dummy time function
-String getTimeFromESP() {
-  return "2025-08-28 14:23:51";
+// Get time from worldtimeapi.org
+String getTimeFromAPI() {
+  String response = "";
+  sendESPCommand("AT+CIPSTART=\"TCP\",\"worldtimeapi.org\",80", 4000);
+  esp.println("AT+CIPSEND=75");   // Length of HTTP GET below
+  delay(100);
+  esp.print("GET /api/timezone/Asia/Kolkata HTTP/1.1\r\nHost: worldtimeapi.org\r\n\r\n");
+
+  long start = millis();
+  while ((millis() - start) < 4000) {
+    while (esp.available()) {
+      char c = esp.read();
+      response += c;
+    }
+  }
+  sendESPCommand("AT+CIPCLOSE", 1000);
+
+  // Extract datetime
+  int idx = response.indexOf("\"datetime\":\"");
+  if (idx != -1) {
+    String dateStr = response.substring(idx + 12, idx + 31); // 2025-08-29T10:21:35
+    return dateStr;
+  }
+  return "TIME_ERR";
 }
 
 void logEvent(String eventType, int dist, String timeStr) {
@@ -109,28 +136,21 @@ void logEvent(String eventType, int dist, String timeStr) {
   }
 }
 
-// RGB LED blink based on distance
+// RGB LED indication
 void blinkRGB(int dist) {
   if (dist > 0 && dist < 7) {
-                                                // Near → Red blink
     digitalWrite(redPin, HIGH);
     digitalWrite(greenPin, LOW);
     digitalWrite(bluePin, LOW);
-  }
-  else if (dist >= 7 && dist <= 15) {
-                                                // Medium → Blue blink
+  } else if (dist >= 7 && dist <= 15) {
     digitalWrite(redPin, LOW);
     digitalWrite(greenPin, LOW);
     digitalWrite(bluePin, HIGH);
-  }
-  else if (dist > 15) {
-                                                // Far → Green blink
+  } else if (dist > 15) {
     digitalWrite(redPin, LOW);
     digitalWrite(greenPin, HIGH);
     digitalWrite(bluePin, LOW);
-  }
-  else {
-                                                // Turn off LED if no object detected
+  } else {
     digitalWrite(redPin, LOW);
     digitalWrite(greenPin, LOW);
     digitalWrite(bluePin, LOW);
